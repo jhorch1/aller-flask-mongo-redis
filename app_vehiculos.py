@@ -6,7 +6,7 @@ import json
 app = Flask(__name__)
 
 # ── CONEXIÓN A MONGODB ───────────────────────────────────────────────────────
-mongo_client = MongoClient("mongodb://localhost:27017")
+mongo_client = MongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=2000)
 db_mongo     = mongo_client["automoviles"]
 vehiculos_col = db_mongo["vehiculos"]
 
@@ -105,6 +105,10 @@ def actualizar_vehiculo(nombre):
     if not datos:
         return jsonify({"error": "Se requiere un cuerpo JSON"}), 400
 
+    nuevo_nombre = datos.get("vehiculo", nombre)
+    if nuevo_nombre != nombre and vehiculos_col.find_one({"vehiculo": nuevo_nombre}):
+        return jsonify({"error": "Ya existe un vehículo con ese nombre"}), 409
+
     resultado = vehiculos_col.update_one(
         {"vehiculo": nombre},
         {"$set": datos}
@@ -113,11 +117,12 @@ def actualizar_vehiculo(nombre):
     if resultado.matched_count == 0:
         return jsonify({"error": "Vehículo no encontrado"}), 404
 
-    # Limpiar caché del vehículo y de la lista
+    # Limpiar caché del vehículo (nombre anterior y nuevo) y de la lista
     cache.delete(f"vehiculo:{nombre}")
+    cache.delete(f"vehiculo:{nuevo_nombre}")
     cache.delete("todos_vehiculos")
 
-    actualizado = vehiculos_col.find_one({"vehiculo": nombre}, {"_id": 0})
+    actualizado = vehiculos_col.find_one({"vehiculo": nuevo_nombre}, {"_id": 0})
     return jsonify({"mensaje": "Vehículo actualizado", "datos": actualizado})
 
 
@@ -149,6 +154,27 @@ def debug_cache():
         ttl_restante = cache.ttl(clave)
         estado[clave] = {"ttl_restante_segundos": ttl_restante}
     return jsonify({"claves_en_redis": estado, "total": len(claves)})
+
+
+# ============================================================
+# GET /health  →  Estado de MongoDB y Redis
+# ============================================================
+@app.route("/health", methods=["GET"])
+def health():
+    estado = {}
+    try:
+        mongo_client.admin.command("ping")
+        estado["mongo"] = "ok"
+    except Exception as e:
+        estado["mongo"] = f"error: {e}"
+    try:
+        cache.ping()
+        estado["redis"] = "ok"
+    except Exception as e:
+        estado["redis"] = f"error: {e}"
+
+    codigo = 200 if all(v == "ok" for v in estado.values()) else 503
+    return jsonify(estado), codigo
 
 
 # ─────────────────────────────────────────────────────────────
