@@ -53,9 +53,10 @@ La API queda disponible en `http://127.0.0.1:5000`
 | GET | `/vehiculos` | Listar todos los vehículos |
 | GET | `/vehiculos/<nombre>` | Buscar un vehículo por nombre |
 | POST | `/vehiculos` | Registrar un nuevo vehículo |
-| PUT | `/vehiculos/<nombre>` | Actualizar un vehículo existente |
+| PUT | `/vehiculos/<nombre>` | Actualizar un vehículo existente (409 si el nuevo nombre ya existe) |
 | DELETE | `/vehiculos/<nombre>` | Eliminar un vehículo |
 | GET | `/debug/cache` | Ver claves activas en Redis con su TTL restante |
+| GET | `/health` | Verificar MongoDB y Redis: `{"mongo": "ok", "redis": "ok"}` (200) o el error con código 503 |
 
 ## Reglas de caché (Cache-Aside con TTL dinámico)
 
